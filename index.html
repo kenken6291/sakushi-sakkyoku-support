@@ -1,0 +1,1716 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Song Studio - 作詞作曲＆会員管理システム</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              400: '#a78bfa',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+              900: '#4c1d95',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- abcjs library for sheet music rendering and audio synthesis -->
+  <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.4/dist/abcjs-basic-min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    /* Sheet music SVG styling */
+    #sheet-music-container svg {
+      width: 100% !important;
+      height: auto !important;
+      background: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+    }
+    .abcjs-highlight {
+      fill: #8b5cf6 !important;
+    }
+    /* Modal transitions */
+    .modal-backdrop {
+      background-color: rgba(3, 7, 18, 0.75);
+      backdrop-filter: blur(6px);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+          <i data-lucide="music-4" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight bg-clip-text text-transparent bg-gradient-to-r from-brand-100 to-brand-400">
+            AI Song Studio
+          </h1>
+          <p class="text-[11px] text-slate-400">作詞・作曲・楽譜生成 & 会員管理システム</p>
+        </div>
+      </div>
+
+      <!-- Header Right: Auth & Controls -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Mail Simulator Inbox Icon -->
+        <button id="inbox-toggle-btn" class="relative p-2 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-lg border border-slate-700/80 transition" title="受信トレイ（仮パスワード通知確認）">
+          <i data-lucide="mail" class="w-4 h-4"></i>
+          <span id="unread-mail-badge" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-brand-500 rounded-full ring-2 ring-slate-900 animate-ping"></span>
+          <span id="unread-mail-dot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-500 rounded-full"></span>
+        </button>
+
+        <button id="history-toggle-btn" class="flex items-center gap-1.5 text-xs sm:text-sm bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition">
+          <i data-lucide="history" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">履歴</span>
+          <span id="history-count" class="bg-brand-600/70 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">0</span>
+        </button>
+
+        <button id="api-key-btn" class="flex items-center gap-1.5 text-xs sm:text-sm bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition" title="Gemini API設定">
+          <i data-lucide="key-round" class="w-4 h-4"></i>
+          <span class="hidden md:inline">API設定</span>
+        </button>
+
+        <!-- Unauthenticated View -->
+        <div id="auth-unlogged" class="flex items-center gap-2">
+          <button id="open-login-btn" class="text-xs sm:text-sm font-medium text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 px-3.5 py-2 rounded-lg border border-slate-700 transition">
+            ログイン
+          </button>
+          <button id="open-register-btn" class="text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 px-3.5 py-2 rounded-lg shadow-md shadow-brand-600/20 transition">
+            新規登録
+          </button>
+        </div>
+
+        <!-- Authenticated View -->
+        <div id="auth-logged" class="hidden items-center gap-2">
+          <button id="open-account-btn" class="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition">
+            <div class="w-6 h-6 rounded-full bg-brand-600/40 text-brand-300 border border-brand-500/40 flex items-center justify-center text-xs font-semibold" id="header-avatar">
+              U
+            </div>
+            <span id="header-username" class="text-xs font-medium max-w-[100px] sm:max-w-[140px] truncate">ユーザー</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+          </button>
+          <button id="logout-btn" class="text-xs bg-slate-800/80 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 p-2 rounded-lg border border-slate-700/80 hover:border-rose-900/40 transition" title="ログアウト">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Studio -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- Left Column: Input Form (5 cols on lg) -->
+    <section class="lg:col-span-5 flex flex-col gap-6">
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden backdrop-blur-sm">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold flex items-center gap-2 text-white">
+            <i data-lucide="sparkles" class="w-5 h-5 text-brand-500"></i>
+            楽曲のテーマと設定
+          </h2>
+          <span id="user-status-badge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">ゲストモード</span>
+        </div>
+
+        <form id="song-generator-form" class="space-y-4">
+          <!-- Theme / Keywords -->
+          <div>
+            <label for="theme" class="block text-xs font-medium text-slate-300 mb-1.5">
+              テーマ・キーワード <span class="text-brand-500">*</span>
+            </label>
+            <input 
+              type="text" 
+              id="theme" 
+              name="theme" 
+              required
+              placeholder="例: 春の出会いと旅立ち、夜明けのドライブ、夏のキャンプ"
+              class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+            />
+          </div>
+
+          <!-- Mood / Story Details -->
+          <div>
+            <label for="details" class="block text-xs font-medium text-slate-300 mb-1.5">
+              追加のニュアンス・情景 (任意)
+            </label>
+            <textarea 
+              id="details" 
+              name="details" 
+              rows="2"
+              placeholder="例: 切なさと希望が入り混じるエモーショナルな雰囲気。サビで爽快に盛り上がるように。"
+              class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition resize-none"
+            ></textarea>
+          </div>
+
+          <!-- Genre Selection -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="genre" class="block text-xs font-medium text-slate-300 mb-1.5">
+                ジャンル / スタイル
+              </label>
+              <select 
+                id="genre" 
+                name="genre"
+                class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+              >
+                <option value="J-POP">J-POP (キャッチー)</option>
+                <option value="Ballad">バラード (切ない・温かい)</option>
+                <option value="Acoustic Folk">アコースティック / フォーク</option>
+                <option value="Jazz / Bossa Nova">ジャズ / ボサノバ</option>
+                <option value="Latin / Salsa">ラテン / サルサ</option>
+                <option value="City Pop / Synthwave">シティポップ / レトロ</option>
+                <option value="Rock / Pop Punk">ポップロック / 明るい</option>
+                <option value="Lofi Chill">ローファイ・チル</option>
+              </select>
+            </div>
+
+            <!-- Key / Scale -->
+            <div>
+              <label for="scale" class="block text-xs font-medium text-slate-300 mb-1.5">
+                キー (調)
+              </label>
+              <select 
+                id="scale" 
+                name="scale"
+                class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+              >
+                <option value="C">C Major (ハ長調)</option>
+                <option value="G">G Major (ト長調)</option>
+                <option value="F">F Major (ヘ長調)</option>
+                <option value="D">D Major (ニ長調)</option>
+                <option value="Am">A Minor (イ短調)</option>
+                <option value="Em">E Minor (ホ短調)</option>
+                <option value="Dm">D Minor (ニ短調)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tempo & Time Signature -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="flex justify-between items-center mb-1.5">
+                <label for="tempo" class="text-xs font-medium text-slate-300">テンポ (BPM)</label>
+                <span id="tempo-val" class="text-xs font-mono text-brand-400 font-semibold">120</span>
+              </div>
+              <input 
+                type="range" 
+                id="tempo" 
+                name="tempo" 
+                min="60" 
+                max="180" 
+                value="120"
+                class="w-full accent-brand-500 h-2 bg-slate-950 rounded-lg cursor-pointer"
+                oninput="document.getElementById('tempo-val').innerText = this.value"
+              />
+            </div>
+
+            <div>
+              <label for="meter" class="block text-xs font-medium text-slate-300 mb-1.5">
+                拍子 (Time Sig.)
+              </label>
+              <select 
+                id="meter" 
+                name="meter"
+                class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+              >
+                <option value="4/4">4/4 拍子</option>
+                <option value="3/4">3/4 拍子 (ワルツ)</option>
+                <option value="6/8">6/8 拍子</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            id="generate-btn"
+            class="w-full mt-2 py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-medium rounded-xl shadow-lg shadow-brand-600/30 flex items-center justify-center gap-2 transition transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i data-lucide="wand-2" class="w-5 h-5"></i>
+            <span>作詞＆作曲を一括生成する</span>
+          </button>
+        </form>
+
+        <!-- Quick Presets -->
+        <div class="mt-5 pt-4 border-t border-slate-800">
+          <p class="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">クイックプリセット</p>
+          <div class="flex flex-wrap gap-1.5">
+            <button class="preset-badge text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700/60 transition" data-theme="桜咲く並木道と新しい一歩" data-genre="J-POP" data-bpm="128" data-meter="4/4" data-scale="G">🌸 春のJ-POP</button>
+            <button class="preset-badge text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700/60 transition" data-theme="雨の降る夜のカフェテラス" data-genre="Jazz / Bossa Nova" data-bpm="92" data-meter="4/4" data-scale="Dm">☕ 雨の夜ジャズ</button>
+            <button class="preset-badge text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700/60 transition" data-theme="波打ち際で踊るトロピカルナイト" data-genre="Latin / Salsa" data-bpm="135" data-meter="4/4" data-scale="C">💃 ラテンダンス</button>
+            <button class="preset-badge text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700/60 transition" data-theme="星空の下で歌う静かな夜" data-genre="Acoustic Folk" data-bpm="84" data-meter="3/4" data-scale="C">🌌 星空ワルツ</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Results & Sheet Music (7 cols on lg) -->
+    <section class="lg:col-span-7 flex flex-col gap-6">
+      
+      <!-- Empty State View -->
+      <div id="empty-state" class="bg-slate-900/60 border border-slate-800/80 border-dashed rounded-2xl p-12 text-center flex flex-col items-center justify-center min-h-[420px]">
+        <div class="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 mb-4">
+          <i data-lucide="music" class="w-8 h-8"></i>
+        </div>
+        <h3 class="text-base font-medium text-slate-300 mb-1">まだ楽曲が生成されていません</h3>
+        <p class="text-xs text-slate-500 max-w-xs mb-4">
+          テーマやジャンルを指定して「作詞＆作曲を一括生成する」を押してください。
+        </p>
+      </div>
+
+      <!-- Loading State View -->
+      <div id="loading-state" class="hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-10 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden">
+        <div class="relative mb-6">
+          <div class="w-16 h-16 border-4 border-brand-500/20 border-t-brand-500 rounded-full animate-spin"></div>
+          <i data-lucide="sparkles" class="w-6 h-6 text-brand-400 absolute inset-0 m-auto animate-pulse"></i>
+        </div>
+        <h3 id="loading-title" class="text-lg font-semibold text-white mb-2">AIが楽曲を紡いでいます...</h3>
+        <p id="loading-step" class="text-xs text-brand-300 font-mono">メロディとコード進行・ABC記譜を構成中...</p>
+        <div class="w-64 bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+          <div class="bg-gradient-to-r from-brand-500 to-indigo-400 h-full w-2/3 animate-[pulse_1.5s_infinite]"></div>
+        </div>
+      </div>
+
+      <!-- Result Container -->
+      <div id="result-container" class="hidden flex-col gap-5">
+        
+        <!-- Header & Audio Player Control Panel -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+            <div>
+              <span id="res-badge" class="inline-block text-[11px] font-semibold text-brand-400 uppercase tracking-wider bg-brand-950/80 px-2 py-0.5 rounded border border-brand-800/60 mb-1">
+                J-POP • 120 BPM
+              </span>
+              <h2 id="res-title" class="text-xl font-bold text-white tracking-tight">曲のタイトル</h2>
+            </div>
+
+            <!-- Export Actions -->
+            <div class="flex items-center gap-2">
+              <button id="copy-lyrics-btn" class="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition" title="歌詞をクリップボードにコピー">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>歌詞コピー</span>
+              </button>
+              <button id="download-abc-btn" class="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition" title="ABC楽譜ファイルをダウンロード">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                <span>ABC保存</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+              <button id="play-btn" class="w-11 h-11 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shadow-lg shadow-brand-600/30 transition transform active:scale-95">
+                <i data-lucide="play" class="w-5 h-5 ml-0.5" id="play-icon"></i>
+              </button>
+              <button id="stop-btn" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700 transition">
+                <i data-lucide="square" class="w-4 h-4"></i>
+              </button>
+              <div class="ml-2">
+                <span id="player-status" class="text-xs font-medium text-slate-300 block">シンセ再生待機中</span>
+                <span id="player-timer" class="text-[11px] font-mono text-slate-500">ABC Synthesizer</span>
+              </div>
+            </div>
+
+            <!-- Playback Speed Control -->
+            <div class="flex items-center gap-3 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800">
+              <i data-lucide="gauge" class="w-4 h-4 text-slate-400"></i>
+              <label for="playback-bpm" class="text-xs text-slate-400">再生テンポ:</label>
+              <input 
+                type="range" 
+                id="playback-bpm" 
+                min="50" 
+                max="200" 
+                value="120"
+                class="w-24 accent-brand-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+              />
+              <span id="playback-bpm-val" class="text-xs font-mono text-brand-400 w-8">120</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="file-music" class="w-4 h-4 text-brand-400"></i>
+              五線譜 (Sheet Music)
+            </h3>
+            <span class="text-[11px] text-slate-400">abcjs リアルタイムレンダリング</span>
+          </div>
+
+          <!-- Chord Progression Banner -->
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3">
+            <p class="text-[11px] font-medium text-slate-400 mb-1">🎵 推奨コード進行</p>
+            <div id="chord-progression" class="font-mono text-xs text-indigo-300 font-semibold tracking-wide overflow-x-auto whitespace-nowrap">
+              C - G - Am - F
+            </div>
+          </div>
+
+          <!-- Music Notation SVG Render Target -->
+          <div id="sheet-music-container" class="overflow-x-auto min-h-[160px] bg-slate-950 rounded-xl p-2 flex items-center justify-center border border-slate-800">
+            <!-- Sheet music will be drawn here -->
+          </div>
+        </div>
+
+        <!-- Lyrics Section -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="mic-2" class="w-4 h-4 text-brand-400"></i>
+              作詞 (Lyrics)
+            </h3>
+          </div>
+          <div id="lyrics-display" class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 text-sm leading-relaxed text-slate-200 whitespace-pre-wrap font-sans max-h-96 overflow-y-auto">
+            <!-- Lyrics will be shown here -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= AUTHENTICATION MODALS ================= -->
+
+  <!-- 1. Register Modal -->
+  <div id="register-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-brand-400"></i>
+          新規会員登録
+        </h3>
+        <button id="close-register-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+        メールアドレス宛に安全な仮パスワードを発行します。初回ログイン時に本パスワードを設定してください。
+      </p>
+
+      <form id="register-form" class="space-y-4">
+        <div>
+          <label for="reg-email" class="block text-xs font-medium text-slate-300 mb-1">
+            メールアドレス <span class="text-rose-400">*</span>
+          </label>
+          <input 
+            type="email" 
+            id="reg-email" 
+            required 
+            placeholder="name@example.com"
+            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div>
+          <label for="reg-nickname" class="block text-xs font-medium text-slate-300 mb-1">
+            ニックネーム <span class="text-rose-400">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="reg-nickname" 
+            required 
+            placeholder="作曲タロウ"
+            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <!-- Terms and Disclaimers agreement -->
+        <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-xs text-slate-400 space-y-2">
+          <div class="font-medium text-slate-300">【注意事項・免責事項】</div>
+          <p class="text-[11px] leading-normal">
+            ・AIにより生成された楽曲の利用は自己責任にてお願いいたします。<br>
+            ・送信元アドレス <code class="text-brand-300 font-mono">my60smyrules@gmail.com</code> から仮パスワード通知が行われます。
+          </p>
+          <label class="flex items-start gap-2 pt-1 cursor-pointer select-none">
+            <input type="checkbox" id="reg-agree" required class="mt-0.5 rounded bg-slate-900 border-slate-700 text-brand-600 focus:ring-brand-500">
+            <span class="text-xs text-slate-300 font-medium">利用規約および免責事項に同意します <span class="text-rose-400">*</span></span>
+          </label>
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-2.5 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-medium text-sm rounded-xl shadow-lg shadow-brand-600/20 transition"
+        >
+          仮パスワードを発行して登録
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Login Modal -->
+  <div id="login-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+          <i data-lucide="log-in" class="w-5 h-5 text-brand-400"></i>
+          会員ログイン
+        </h3>
+        <button id="close-login-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label for="login-email" class="block text-xs font-medium text-slate-300 mb-1">
+            メールアドレス
+          </label>
+          <input 
+            type="email" 
+            id="login-email" 
+            required 
+            placeholder="name@example.com"
+            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label for="login-password" class="block text-xs font-medium text-slate-300">
+              パスワード (または仮パスワード)
+            </label>
+            <button type="button" id="forgot-password-link" class="text-xs text-brand-400 hover:text-brand-300 underline">
+              お忘れの方
+            </button>
+          </div>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="login-password" 
+              required 
+              placeholder="••••••••••••"
+              class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button type="button" class="password-toggle-btn absolute right-3 top-2.5 text-slate-400 hover:text-slate-200" data-target="login-password">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-2.5 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-medium text-sm rounded-xl shadow-lg shadow-brand-600/20 transition"
+        >
+          ログイン
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Forced First-Time Password Change Modal -->
+  <div id="force-password-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-2xl p-6 shadow-2xl relative">
+      <div class="flex items-center gap-2 pb-3 mb-3 border-b border-slate-800 text-amber-400">
+        <i data-lucide="shield-alert" class="w-5 h-5"></i>
+        <h3 class="text-base font-semibold text-white">初回パスワード変更 (必須)</h3>
+      </div>
+
+      <p class="text-xs text-slate-300 mb-4 leading-relaxed">
+        仮パスワードでログインしています。セキュリティ保護のため、本パスワードに変更するまでシステムをご利用いただけません。
+      </p>
+
+      <form id="force-password-form" class="space-y-4">
+        <div>
+          <label for="force-new-pass" class="block text-xs font-medium text-slate-300 mb-1">
+            新しいパスワード (8文字以上、英数字記号推奨)
+          </label>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="force-new-pass" 
+              required 
+              minlength="8"
+              placeholder="新しいパスワード"
+              class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button type="button" class="password-toggle-btn absolute right-3 top-2.5 text-slate-400 hover:text-slate-200" data-target="force-new-pass">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label for="force-new-pass-confirm" class="block text-xs font-medium text-slate-300 mb-1">
+            新しいパスワード (確認)
+          </label>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="force-new-pass-confirm" 
+              required 
+              minlength="8"
+              placeholder="もう一度入力"
+              class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <button type="button" class="password-toggle-btn absolute right-3 top-2.5 text-slate-400 hover:text-slate-200" data-target="force-new-pass-confirm">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm rounded-xl shadow-lg shadow-brand-600/30 transition"
+        >
+          パスワードを設定して完了
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Forgot / Reset Password Modal -->
+  <div id="forgot-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+          <i data-lucide="key" class="w-5 h-5 text-brand-400"></i>
+          パスワード再発行
+        </h3>
+        <button id="close-forgot-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+        ご登録のメールアドレスを入力してください。<code class="text-brand-300 font-mono">my60smyrules@gmail.com</code> から新しい仮パスワードを発行・通知します。
+      </p>
+
+      <form id="forgot-form" class="space-y-4">
+        <div>
+          <label for="forgot-email" class="block text-xs font-medium text-slate-300 mb-1">
+            メールアドレス
+          </label>
+          <input 
+            type="email" 
+            id="forgot-email" 
+            required 
+            placeholder="name@example.com"
+            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm rounded-xl transition"
+        >
+          仮パスワードを送信
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Account & Profile Management Modal -->
+  <div id="account-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+          <i data-lucide="user-cog" class="w-5 h-5 text-brand-400"></i>
+          アカウント管理・設定
+        </h3>
+        <button id="close-account-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Account Tabs -->
+      <div class="flex border-b border-slate-800 mb-5 gap-2 text-xs">
+        <button id="tab-profile-btn" class="pb-2 px-3 font-semibold text-brand-400 border-b-2 border-brand-500 transition">
+          プロフィール変更
+        </button>
+        <button id="tab-password-btn" class="pb-2 px-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition">
+          パスワード変更
+        </button>
+        <button id="tab-danger-btn" class="pb-2 px-3 text-rose-400 hover:text-rose-300 border-b-2 border-transparent transition">
+          退会手続き
+        </button>
+      </div>
+
+      <!-- Tab 1: Profile Edit -->
+      <div id="tab-profile" class="space-y-4">
+        <form id="profile-form" class="space-y-4">
+          <div>
+            <label for="acc-email" class="block text-xs font-medium text-slate-300 mb-1">メールアドレス</label>
+            <input type="email" id="acc-email" required class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label for="acc-nickname" class="block text-xs font-medium text-slate-300 mb-1">ニックネーム</label>
+            <input type="text" id="acc-nickname" required class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-brand-500">
+          </div>
+          <button type="submit" class="py-2.5 px-5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl transition">
+            登録情報を更新
+          </button>
+        </form>
+      </div>
+
+      <!-- Tab 2: Password Change -->
+      <div id="tab-password" class="space-y-4 hidden">
+        <form id="change-pass-form" class="space-y-4">
+          <div>
+            <label for="cur-pass" class="block text-xs font-medium text-slate-300 mb-1">現在のパスワード</label>
+            <div class="relative">
+              <input type="password" id="cur-pass" required class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-brand-500">
+              <button type="button" class="password-toggle-btn absolute right-3 top-2.5 text-slate-400" data-target="cur-pass"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+          <div>
+            <label for="new-pass" class="block text-xs font-medium text-slate-300 mb-1">新しいパスワード (8文字以上)</label>
+            <div class="relative">
+              <input type="password" id="new-pass" minlength="8" required class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-brand-500">
+              <button type="button" class="password-toggle-btn absolute right-3 top-2.5 text-slate-400" data-target="new-pass"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+          <div>
+            <label for="new-pass-confirm" class="block text-xs font-medium text-slate-300 mb-1">新しいパスワード (確認)</label>
+            <div class="relative">
+              <input type="password" id="new-pass-confirm" minlength="8" required class="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-brand-500">
+              <button type="button" class="password-toggle-btn absolute right-3 top-2.5 text-slate-400" data-target="new-pass-confirm"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="py-2.5 px-5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl transition">
+            パスワードを変更する
+          </button>
+        </form>
+      </div>
+
+      <!-- Tab 3: Danger Zone (Delete Account) -->
+      <div id="tab-danger" class="space-y-4 hidden">
+        <div class="p-4 bg-rose-950/30 border border-rose-900/50 rounded-xl">
+          <h4 class="text-sm font-semibold text-rose-300 mb-1 flex items-center gap-1.5">
+            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            退会（アカウントの完全削除）
+          </h4>
+          <p class="text-xs text-rose-300/80 leading-relaxed mb-4">
+            退会すると、保存されているすべてのデータおよび楽曲履歴が完全に削除され、復元することはできません。
+          </p>
+
+          <form id="delete-account-form" class="space-y-3">
+            <div>
+              <label for="del-pass-confirm" class="block text-xs font-medium text-slate-300 mb-1">
+                確認のためパスワードを入力してください
+              </label>
+              <input type="password" id="del-pass-confirm" required class="w-full bg-slate-950 border border-rose-900/60 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:ring-2 focus:ring-rose-500">
+            </div>
+            <button type="submit" class="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition">
+              完全に退会する
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Simulated Mailbox Modal (my60smyrules@gmail.com) -->
+  <div id="mailbox-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="mail-check" class="w-5 h-5 text-brand-400"></i>
+          <div>
+            <h3 class="text-sm font-semibold text-white">受信トレイ通知（シミュレータ）</h3>
+            <p class="text-[10px] text-slate-400 font-mono">From: my60smyrules@gmail.com</p>
+          </div>
+        </div>
+        <button id="close-mailbox-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="mailbox-content" class="space-y-3 max-h-72 overflow-y-auto">
+        <!-- Messages rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- History Drawer -->
+  <div id="history-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex justify-end">
+    <div class="w-full max-w-md bg-slate-900 border-l border-slate-800 h-full p-6 flex flex-col shadow-2xl">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+          <i data-lucide="history" class="w-5 h-5 text-brand-400"></i>
+          生成履歴
+        </h3>
+        <button id="close-history-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="history-list" class="flex-1 overflow-y-auto py-4 space-y-3">
+        <!-- History items dynamically inserted -->
+      </div>
+
+      <div class="pt-3 border-t border-slate-800">
+        <button id="clear-history-btn" class="w-full py-2 px-3 text-xs text-rose-400 hover:bg-rose-950/40 rounded-lg border border-rose-900/40 transition">
+          履歴をすべて消去
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Key Modal -->
+  <div id="api-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+          <i data-lucide="key-round" class="w-5 h-5 text-brand-400"></i>
+          Gemini API 設定
+        </h3>
+        <button id="close-api-modal-btn" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400 mb-4">
+        ご自身のGemini API Keyを設定できます。空欄の場合は組み込みのデフォルト環境キーが利用されます。
+      </p>
+
+      <div class="space-y-4">
+        <div>
+          <label for="custom-api-key" class="block text-xs font-medium text-slate-300 mb-1.5">
+            Gemini API Key
+          </label>
+          <input 
+            type="password" 
+            id="custom-api-key" 
+            placeholder="AIzaSy..." 
+            class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="save-api-key-btn" class="py-2 px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded-xl transition">
+            保存する
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl shadow-xl z-50 transition transform translate-y-20 opacity-0 pointer-events-none flex items-center gap-2">
+    <i data-lucide="info" class="w-4 h-4 text-brand-400"></i>
+    <span id="toast-msg">通知メッセージ</span>
+  </div>
+
+  <script>
+    /* ==========================================================
+       SECURITY & CRYPTO HELPERS (SHA-256 with Salt)
+       ========================================================== */
+    async function hashPassword(password, salt) {
+      const enc = new TextEncoder();
+      const data = enc.encode(password + (salt || 'ai_song_studio_salt_2026'));
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function generateSecureTempPassword(length = 12) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+      const array = new Uint8Array(length);
+      crypto.getRandomValues(array);
+      let result = '';
+      for (let i = 0; i < length; i++) {
+        result += chars[array[i] % chars.length];
+      }
+      return result;
+    }
+
+    /* ==========================================================
+       AUTHENTICATION & USER STATE MANAGEMENT
+       ========================================================== */
+    const SENDER_EMAIL = 'my60smyrules@gmail.com';
+    let currentUser = JSON.parse(sessionStorage.getItem('ai_song_current_user') || 'null');
+    let simulatedInbox = JSON.parse(localStorage.getItem('ai_song_inbox') || '[]');
+
+    function getRegisteredUsers() {
+      return JSON.parse(localStorage.getItem('ai_song_registered_users') || '{}');
+    }
+
+    function saveRegisteredUsers(users) {
+      localStorage.setItem('ai_song_registered_users', JSON.stringify(users));
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      toastMsg.innerText = message;
+      toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 3500);
+    }
+
+    function updateAuthUI() {
+      const unlogged = document.getElementById('auth-unlogged');
+      const logged = document.getElementById('auth-logged');
+      const userStatusBadge = document.getElementById('user-status-badge');
+
+      if (currentUser) {
+        unlogged.classList.add('hidden');
+        logged.classList.remove('hidden');
+        logged.classList.add('flex');
+        document.getElementById('header-username').innerText = currentUser.nickname;
+        document.getElementById('header-avatar').innerText = (currentUser.nickname || 'U').charAt(0).toUpperCase();
+        userStatusBadge.innerText = `会員: ${currentUser.nickname}`;
+        userStatusBadge.className = 'text-[10px] bg-brand-950 text-brand-300 px-2 py-0.5 rounded-full border border-brand-800';
+      } else {
+        unlogged.classList.remove('hidden');
+        logged.classList.add('hidden');
+        logged.classList.remove('flex');
+        userStatusBadge.innerText = 'ゲストモード';
+        userStatusBadge.className = 'text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700';
+      }
+      updateInboxBadge();
+    }
+
+    function updateInboxBadge() {
+      const unreadBadge = document.getElementById('unread-mail-badge');
+      const unreadDot = document.getElementById('unread-mail-dot');
+      if (simulatedInbox.length > 0) {
+        unreadBadge.classList.remove('hidden');
+        unreadDot.classList.remove('hidden');
+      } else {
+        unreadBadge.classList.add('hidden');
+        unreadDot.classList.add('hidden');
+      }
+    }
+
+    function pushSimulatedEmail(to, subject, body, tempPass) {
+      const mail = {
+        id: Date.now(),
+        from: SENDER_EMAIL,
+        to: to,
+        subject: subject,
+        body: body,
+        tempPass: tempPass,
+        date: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      };
+      simulatedInbox.unshift(mail);
+      localStorage.setItem('ai_song_inbox', JSON.stringify(simulatedInbox));
+      updateInboxBadge();
+      showToast(`メールを受信しました: ${subject}`);
+    }
+
+    /* Password Eye Toggle */
+    document.querySelectorAll('.password-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const input = document.getElementById(targetId);
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.innerHTML = '<i data-lucide="eye-off" class="w-4 h-4"></i>';
+        } else {
+          input.type = 'password';
+          btn.innerHTML = '<i data-lucide="eye" class="w-4 h-4"></i>';
+        }
+        lucide.createIcons();
+      });
+    });
+
+    // 1. Register logic
+    const registerModal = document.getElementById('register-modal');
+    document.getElementById('open-register-btn').addEventListener('click', () => registerModal.classList.remove('hidden'));
+    document.getElementById('close-register-btn').addEventListener('click', () => registerModal.classList.add('hidden'));
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('reg-email').value.trim().toLowerCase();
+      const nickname = document.getElementById('reg-nickname').value.trim();
+      const agree = document.getElementById('reg-agree').checked;
+
+      if (!agree) {
+        showToast('利用規約と免責事項への同意が必要です');
+        return;
+      }
+
+      const users = getRegisteredUsers();
+      if (users[email]) {
+        showToast('このメールアドレスは既に登録されています');
+        return;
+      }
+
+      const tempPass = generateSecureTempPassword(12);
+      const passHash = await hashPassword(tempPass, email);
+
+      users[email] = {
+        email: email,
+        nickname: nickname,
+        passwordHash: passHash,
+        is_temporary_password: true,
+        createdAt: new Date().toISOString()
+      };
+      saveRegisteredUsers(users);
+
+      // Send simulated verification email
+      pushSimulatedEmail(
+        email,
+        '【AI Song Studio】会員登録の仮パスワード発行のお知らせ',
+        `こんにちは、${nickname} 様\n\nAI Song Studioへのご登録ありがとうございます。\n仮パスワードを発行いたしました。\n初回ログイン時に本パスワードへ変更してください。\n\n仮パスワード: ${tempPass}\n送信元: ${SENDER_EMAIL}`,
+        tempPass
+      );
+
+      registerModal.classList.add('hidden');
+      document.getElementById('register-form').reset();
+      
+      // Auto open mailbox for immediate UX testing
+      openMailbox();
+    });
+
+    // 2. Login logic
+    const loginModal = document.getElementById('login-modal');
+    const forcePasswordModal = document.getElementById('force-password-modal');
+    document.getElementById('open-login-btn').addEventListener('click', () => loginModal.classList.remove('hidden'));
+    document.getElementById('close-login-btn').addEventListener('click', () => loginModal.classList.add('hidden'));
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-password').value;
+
+      const users = getRegisteredUsers();
+      const user = users[email];
+
+      if (!user) {
+        showToast('メールアドレスまたはパスワードが正しくありません');
+        return;
+      }
+
+      const hash = await hashPassword(password, email);
+      if (hash !== user.passwordHash) {
+        showToast('メールアドレスまたはパスワードが正しくありません');
+        return;
+      }
+
+      loginModal.classList.add('hidden');
+      document.getElementById('login-form').reset();
+
+      // Check if temporary password
+      if (user.is_temporary_password) {
+        currentUser = { email: user.email, nickname: user.nickname, is_temporary: true };
+        sessionStorage.setItem('ai_song_current_user', JSON.stringify(currentUser));
+        forcePasswordModal.classList.remove('hidden');
+        showToast('仮パスワードのため、本パスワードへの変更が必要です');
+      } else {
+        currentUser = { email: user.email, nickname: user.nickname, is_temporary: false };
+        sessionStorage.setItem('ai_song_current_user', JSON.stringify(currentUser));
+        updateAuthUI();
+        showToast(`おかえりなさい、${user.nickname} さん！`);
+      }
+    });
+
+    // 3. Forced Password Change logic
+    document.getElementById('force-password-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const newPass = document.getElementById('force-new-pass').value;
+      const confirmPass = document.getElementById('force-new-pass-confirm').value;
+
+      if (newPass !== confirmPass) {
+        showToast('パスワードが一致しません');
+        return;
+      }
+      if (newPass.length < 8) {
+        showToast('パスワードは8文字以上で設定してください');
+        return;
+      }
+
+      const users = getRegisteredUsers();
+      if (!users[currentUser.email]) return;
+
+      const newHash = await hashPassword(newPass, currentUser.email);
+      users[currentUser.email].passwordHash = newHash;
+      users[currentUser.email].is_temporary_password = false;
+      saveRegisteredUsers(users);
+
+      currentUser.is_temporary = false;
+      sessionStorage.setItem('ai_song_current_user', JSON.stringify(currentUser));
+
+      forcePasswordModal.classList.add('hidden');
+      document.getElementById('force-password-form').reset();
+      updateAuthUI();
+      showToast('本パスワードの設定が完了しました！');
+    });
+
+    // 4. Forgot Password logic
+    const forgotModal = document.getElementById('forgot-modal');
+    document.getElementById('forgot-password-link').addEventListener('click', () => {
+      loginModal.classList.add('hidden');
+      forgotModal.classList.remove('hidden');
+    });
+    document.getElementById('close-forgot-btn').addEventListener('click', () => forgotModal.classList.add('hidden'));
+
+    document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+      const users = getRegisteredUsers();
+
+      if (users[email]) {
+        const tempPass = generateSecureTempPassword(12);
+        const passHash = await hashPassword(tempPass, email);
+        users[email].passwordHash = passHash;
+        users[email].is_temporary_password = true;
+        saveRegisteredUsers(users);
+
+        pushSimulatedEmail(
+          email,
+          '【AI Song Studio】パスワード再発行（仮パスワード）のお知らせ',
+          `パスワード再発行を受け付けました。\n新しい仮パスワードを発行いたしました。\n\n仮パスワード: ${tempPass}\n送信元: ${SENDER_EMAIL}`,
+          tempPass
+        );
+      }
+
+      forgotModal.classList.add('hidden');
+      document.getElementById('forgot-form').reset();
+      showToast('仮パスワードを送信しました（受信トレイをご確認ください）');
+      openMailbox();
+    });
+
+    // 5. Account Management & Profile Edit
+    const accountModal = document.getElementById('account-modal');
+    document.getElementById('open-account-btn').addEventListener('click', () => {
+      if (!currentUser) return;
+      document.getElementById('acc-email').value = currentUser.email;
+      document.getElementById('acc-nickname').value = currentUser.nickname;
+      accountModal.classList.remove('hidden');
+    });
+    document.getElementById('close-account-btn').addEventListener('click', () => accountModal.classList.add('hidden'));
+
+    // Tab switching
+    const tabProfileBtn = document.getElementById('tab-profile-btn');
+    const tabPasswordBtn = document.getElementById('tab-password-btn');
+    const tabDangerBtn = document.getElementById('tab-danger-btn');
+    const tabProfile = document.getElementById('tab-profile');
+    const tabPassword = document.getElementById('tab-password');
+    const tabDanger = document.getElementById('tab-danger');
+
+    function selectAccountTab(tab) {
+      [tabProfile, tabPassword, tabDanger].forEach(t => t.classList.add('hidden'));
+      [tabProfileBtn, tabPasswordBtn, tabDangerBtn].forEach(b => {
+        b.className = 'pb-2 px-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition';
+      });
+
+      if (tab === 'profile') {
+        tabProfile.classList.remove('hidden');
+        tabProfileBtn.className = 'pb-2 px-3 font-semibold text-brand-400 border-b-2 border-brand-500 transition';
+      } else if (tab === 'password') {
+        tabPassword.classList.remove('hidden');
+        tabPasswordBtn.className = 'pb-2 px-3 font-semibold text-brand-400 border-b-2 border-brand-500 transition';
+      } else if (tab === 'danger') {
+        tabDanger.classList.remove('hidden');
+        tabDangerBtn.className = 'pb-2 px-3 font-semibold text-rose-400 border-b-2 border-rose-500 transition';
+      }
+    }
+
+    tabProfileBtn.addEventListener('click', () => selectAccountTab('profile'));
+    tabPasswordBtn.addEventListener('click', () => selectAccountTab('password'));
+    tabDangerBtn.addEventListener('click', () => selectAccountTab('danger'));
+
+    // Profile form update
+    document.getElementById('profile-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const newEmail = document.getElementById('acc-email').value.trim().toLowerCase();
+      const newNickname = document.getElementById('acc-nickname').value.trim();
+
+      const users = getRegisteredUsers();
+      if (!users[currentUser.email]) return;
+
+      const userObj = users[currentUser.email];
+      userObj.nickname = newNickname;
+
+      if (newEmail !== currentUser.email) {
+        if (users[newEmail]) {
+          showToast('そのメールアドレスは既に使用されています');
+          return;
+        }
+        delete users[currentUser.email];
+        userObj.email = newEmail;
+        users[newEmail] = userObj;
+        currentUser.email = newEmail;
+      }
+
+      currentUser.nickname = newNickname;
+      saveRegisteredUsers(users);
+      sessionStorage.setItem('ai_song_current_user', JSON.stringify(currentUser));
+      updateAuthUI();
+      accountModal.classList.add('hidden');
+      showToast('プロフィール情報を更新しました');
+    });
+
+    // Password change in account modal
+    document.getElementById('change-pass-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const curPass = document.getElementById('cur-pass').value;
+      const newPass = document.getElementById('new-pass').value;
+      const confirmPass = document.getElementById('new-pass-confirm').value;
+
+      if (newPass !== confirmPass) {
+        showToast('新しいパスワードが一致しません');
+        return;
+      }
+
+      const users = getRegisteredUsers();
+      const user = users[currentUser.email];
+      const curHash = await hashPassword(curPass, currentUser.email);
+
+      if (curHash !== user.passwordHash) {
+        showToast('現在のパスワードが正しくありません');
+        return;
+      }
+
+      const newHash = await hashPassword(newPass, currentUser.email);
+      user.passwordHash = newHash;
+      user.is_temporary_password = false;
+      saveRegisteredUsers(users);
+
+      accountModal.classList.add('hidden');
+      document.getElementById('change-pass-form').reset();
+      showToast('パスワードを変更しました');
+    });
+
+    // Withdrawal / Delete Account
+    document.getElementById('delete-account-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pass = document.getElementById('del-pass-confirm').value;
+      const users = getRegisteredUsers();
+      const user = users[currentUser.email];
+
+      const hash = await hashPassword(pass, currentUser.email);
+      if (hash !== user.passwordHash) {
+        showToast('パスワードが正しくありません');
+        return;
+      }
+
+      delete users[currentUser.email];
+      saveRegisteredUsers(users);
+
+      currentUser = null;
+      sessionStorage.removeItem('ai_song_current_user');
+      accountModal.classList.add('hidden');
+      document.getElementById('delete-account-form').reset();
+      updateAuthUI();
+      showToast('退会処理が完了しました。ご利用ありがとうございました。');
+    });
+
+    // Logout
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      currentUser = null;
+      sessionStorage.removeItem('ai_song_current_user');
+      updateAuthUI();
+      showToast('ログアウトしました');
+    });
+
+    // Simulated Mailbox Popup
+    const mailboxModal = document.getElementById('mailbox-modal');
+    const mailboxContent = document.getElementById('mailbox-content');
+    function openMailbox() {
+      renderMailbox();
+      mailboxModal.classList.remove('hidden');
+    }
+    document.getElementById('inbox-toggle-btn').addEventListener('click', openMailbox);
+    document.getElementById('close-mailbox-btn').addEventListener('click', () => mailboxModal.classList.add('hidden'));
+
+    function renderMailbox() {
+      mailboxContent.innerHTML = '';
+      if (simulatedInbox.length === 0) {
+        mailboxContent.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">受信トレイは空です</div>`;
+        return;
+      }
+
+      simulatedInbox.forEach((mail) => {
+        const item = document.createElement('div');
+        item.className = 'p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2';
+        item.innerHTML = `
+          <div class="flex justify-between items-start">
+            <span class="text-[11px] font-semibold text-brand-400 truncate">${mail.subject}</span>
+            <span class="text-[10px] text-slate-500 font-mono">${mail.date}</span>
+          </div>
+          <p class="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">${mail.body}</p>
+          ${mail.tempPass ? `
+            <div class="pt-2 flex items-center justify-between border-t border-slate-800/80">
+              <span class="text-[10px] text-slate-400">仮パスワード: <code class="text-emerald-400 font-mono font-bold bg-slate-900 px-1.5 py-0.5 rounded">${mail.tempPass}</code></span>
+              <button class="use-pass-btn text-[11px] text-brand-400 hover:text-brand-300 font-medium" data-pass="${mail.tempPass}">
+                入力欄にセット
+              </button>
+            </div>
+          ` : ''}
+        `;
+        mailboxContent.appendChild(item);
+      });
+
+      document.querySelectorAll('.use-pass-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const pass = btn.dataset.pass;
+          document.getElementById('login-password').value = pass;
+          mailboxModal.classList.add('hidden');
+          loginModal.classList.remove('hidden');
+          showToast('仮パスワードをログイン入力欄に設定しました');
+        });
+      });
+    }
+
+    /* State Management */
+    let currentSongData = null;
+    let synthControl = null;
+    let synthAudioContext = null;
+    let isPlaying = false;
+    let customApiKey = localStorage.getItem('gemini_custom_api_key') || "";
+    let songHistory = JSON.parse(localStorage.getItem('ai_song_history') || '[]');
+
+    /* Initialize Icons */
+    lucide.createIcons();
+    updateAuthUI();
+
+    function updateHistoryCount() {
+      document.getElementById('history-count').innerText = songHistory.length;
+    }
+    updateHistoryCount();
+
+    const apiModal = document.getElementById('api-modal');
+    const apiKeyInput = document.getElementById('custom-api-key');
+    apiKeyInput.value = customApiKey;
+
+    document.getElementById('api-key-btn').addEventListener('click', () => {
+      apiKeyInput.value = customApiKey;
+      apiModal.classList.remove('hidden');
+    });
+
+    document.getElementById('close-api-modal-btn').addEventListener('click', () => {
+      apiModal.classList.add('hidden');
+    });
+
+    document.getElementById('save-api-key-btn').addEventListener('click', () => {
+      customApiKey = apiKeyInput.value.trim();
+      localStorage.setItem('gemini_custom_api_key', customApiKey);
+      apiModal.classList.add('hidden');
+      showToast('APIキーを保存しました');
+    });
+
+    document.querySelectorAll('.preset-badge').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('theme').value = btn.dataset.theme;
+        document.getElementById('genre').value = btn.dataset.genre;
+        document.getElementById('tempo').value = btn.dataset.bpm;
+        document.getElementById('tempo-val').innerText = btn.dataset.bpm;
+        document.getElementById('meter').value = btn.dataset.meter;
+        document.getElementById('scale').value = btn.dataset.scale;
+      });
+    });
+
+    async function generateSongWithGemini(formData) {
+      const systemInstruction = `あなたはプロの作詞家兼作曲家です。
+ユーザーから与えられたテーマ、ジャンル、テンポ、拍子、キーに基づいて、魅力的で完成度の高い楽曲データを生成してください。
+
+【出力要件】
+1. title: 楽曲のタイトル (日本語または英語)
+2. lyrics: Verse 1, Pre-Chorus, Chorus, Bridge, Outro のような分かりやすいセクション構成で書かれた日本語の歌詞。
+3. chordProgression: 主要セクション（Aメロ、サビなど）の代表的なコード進行（例: "Verse: C - G - Am - Em | Chorus: F - G - Em - Am"）
+4. abcNotation: 標準的なABC記譜法形式の文字列。
+   - ヘッダーとして必ず X: 1, T: [Title], M: [Meter], L: 1/8 (または適切な音長), Q: 1/4=[Tempo], K: [Key] を含めてください。
+   - メロディラインの上にコード記号（例: "C", "G7", "Am", "F" など）を二重引用符で各小節・拍に合わせて正確に記述してください。
+   - 最低でも16小節〜32小節の美しいメロディ（Aメロ〜サビなど）を完全に記譜してください。
+   - 小節線（|）と改行を正しく入れて構文エラーを防いでください。`;
+
+      const promptText = `以下の条件で魅力的な楽曲（タイトル、歌詞、コード進行、ABC記譜法）をJSON形式で生成してください:
+- テーマ: ${formData.theme}
+- 追加詳細/ニュアンス: ${formData.details || 'なし'}
+- ジャンル/スタイル: ${formData.genre}
+- キー (調): ${formData.scale}
+- テンポ (BPM): ${formData.tempo}
+- 拍子: ${formData.meter}`;
+
+      const payload = {
+        contents: [{ parts: [{ text: promptText }] }],
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              "title": { "type": "STRING", "description": "曲のタイトル" },
+              "lyrics": { "type": "STRING", "description": "構成付きの歌詞" },
+              "chordProgression": { "type": "STRING", "description": "コード進行の説明" },
+              "abcNotation": { "type": "STRING", "description": "ヘッダーとコード記号を含むABC記譜法文字列" }
+            },
+            propertyOrdering: ["title", "lyrics", "chordProgression", "abcNotation"],
+            required: ["title", "lyrics", "chordProgression", "abcNotation"]
+          }
+        }
+      };
+
+      const apiKey = customApiKey || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+      let lastError;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`API Error (${response.status}): ${errBody}`);
+          }
+
+          const result = await response.json();
+          const candidate = result.candidates?.[0];
+          const text = candidate?.content?.parts?.[0]?.text;
+
+          if (!text) {
+            throw new Error("Geminiから応答テキストを取得できませんでした。");
+          }
+
+          return JSON.parse(text);
+        } catch (err) {
+          lastError = err;
+          const waitTime = Math.pow(2, attempt) * 1000;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+
+      throw lastError;
+    }
+
+    function renderSheetMusic(abcString) {
+      const container = document.getElementById('sheet-music-container');
+      container.innerHTML = '';
+
+      try {
+        const visualObj = ABCJS.renderAbc('sheet-music-container', abcString, {
+          responsive: 'resize',
+          scale: 1.1,
+          staffwidth: 650,
+          add_classes: true
+        });
+
+        return visualObj;
+      } catch (err) {
+        console.error("ABCJS render error:", err);
+        container.innerHTML = `<p class="text-xs text-rose-400 p-4">楽譜の描画中にエラーが発生しました。<br>${err.message}</p>`;
+        return null;
+      }
+    }
+
+    async function setupAudioPlayback(visualObj) {
+      if (!visualObj || !visualObj[0]) return;
+      stopAudio();
+
+      try {
+        if (!ABCJS.synth.supportsAudio()) {
+          document.getElementById('player-status').innerText = 'お使いのブラウザはシンセ音声に対応していません';
+          return;
+        }
+
+        synthControl = new ABCJS.synth.CreateSynth();
+        
+        if (!synthAudioContext) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          synthAudioContext = new AudioContextClass();
+        }
+
+        if (synthAudioContext.state === 'suspended') {
+          await synthAudioContext.resume();
+        }
+
+        const bpm = parseInt(document.getElementById('playback-bpm').value, 10) || 120;
+
+        await synthControl.init({
+          visualObj: visualObj[0],
+          audioContext: synthAudioContext,
+          millisecondsPerMeasure: visualObj[0].millisecondsPerMeasure(),
+          options: {
+            program: 0,
+            qpm: bpm,
+            chordsOff: false
+          }
+        });
+
+        await synthControl.prime();
+        document.getElementById('player-status').innerText = '再生準備完了';
+
+      } catch (err) {
+        console.error("Synth init error:", err);
+        document.getElementById('player-status').innerText = 'シンセ読み込み失敗';
+      }
+    }
+
+    const playBtn = document.getElementById('play-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const playbackBpmInput = document.getElementById('playback-bpm');
+    const playbackBpmVal = document.getElementById('playback-bpm-val');
+
+    async function togglePlay() {
+      if (!synthControl) return;
+
+      if (isPlaying) {
+        synthControl.stop();
+        isPlaying = false;
+        updatePlayButtonUI();
+        document.getElementById('player-status').innerText = '一時停止';
+      } else {
+        if (synthAudioContext && synthAudioContext.state === 'suspended') {
+          await synthAudioContext.resume();
+        }
+        synthControl.start();
+        isPlaying = true;
+        updatePlayButtonUI();
+        document.getElementById('player-status').innerText = '再生中 ♫';
+      }
+    }
+
+    function stopAudio() {
+      if (synthControl && isPlaying) {
+        synthControl.stop();
+      }
+      isPlaying = false;
+      updatePlayButtonUI();
+      document.getElementById('player-status').innerText = '停止中';
+    }
+
+    function updatePlayButtonUI() {
+      if (isPlaying) {
+        playBtn.innerHTML = '<i data-lucide="pause" class="w-5 h-5"></i>';
+      } else {
+        playBtn.innerHTML = '<i data-lucide="play" class="w-5 h-5 ml-0.5"></i>';
+      }
+      lucide.createIcons();
+    }
+
+    playBtn.addEventListener('click', togglePlay);
+    stopBtn.addEventListener('click', stopAudio);
+
+    playbackBpmInput.addEventListener('input', async (e) => {
+      const newBpm = e.target.value;
+      playbackBpmVal.innerText = newBpm;
+      if (currentSongData && currentSongData.visualObj) {
+        const wasPlaying = isPlaying;
+        await setupAudioPlayback(currentSongData.visualObj);
+        if (wasPlaying) {
+          togglePlay();
+        }
+      }
+    });
+
+    function displaySong(song, saveToHist = true) {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('result-container').classList.remove('hidden');
+
+      document.getElementById('res-title').innerText = song.title || "無題の楽曲";
+      document.getElementById('res-badge').innerText = `${song.genre || 'Music'} • ${song.tempo || 120} BPM • Key of ${song.scale || 'C'}`;
+      document.getElementById('chord-progression').innerText = song.chordProgression || "C - G - Am - F";
+      document.getElementById('lyrics-display').innerText = song.lyrics || "歌詞データがありません";
+      
+      document.getElementById('playback-bpm').value = song.tempo || 120;
+      document.getElementById('playback-bpm-val').innerText = song.tempo || 120;
+
+      const visualObj = renderSheetMusic(song.abcNotation);
+      song.visualObj = visualObj;
+      currentSongData = song;
+
+      setupAudioPlayback(visualObj);
+
+      if (saveToHist) {
+        const historyItem = {
+          id: Date.now(),
+          createdAt: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+          ...song
+        };
+        delete historyItem.visualObj;
+
+        songHistory.unshift(historyItem);
+        if (songHistory.length > 20) songHistory.pop();
+        localStorage.setItem('ai_song_history', JSON.stringify(songHistory));
+        updateHistoryCount();
+      }
+
+      document.getElementById('result-container').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    const form = document.getElementById('song-generator-form');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const theme = document.getElementById('theme').value.trim();
+      if (!theme) {
+        showToast('テーマを入力してください');
+        return;
+      }
+
+      const formData = {
+        theme: theme,
+        details: document.getElementById('details').value.trim(),
+        genre: document.getElementById('genre').value,
+        scale: document.getElementById('scale').value,
+        tempo: document.getElementById('tempo').value,
+        meter: document.getElementById('meter').value
+      };
+
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('result-container').classList.add('hidden');
+      document.getElementById('loading-state').classList.remove('hidden');
+      document.getElementById('generate-btn').disabled = true;
+
+      try {
+        const generatedData = await generateSongWithGemini(formData);
+        const completeSong = {
+          ...generatedData,
+          genre: formData.genre,
+          scale: formData.scale,
+          tempo: formData.tempo,
+          meter: formData.meter
+        };
+
+        displaySong(completeSong, true);
+        showToast('楽曲が完成しました！');
+      } catch (err) {
+        console.error(err);
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('empty-state').classList.remove('hidden');
+        showToast(`生成エラー: ${err.message}`);
+      } finally {
+        document.getElementById('generate-btn').disabled = false;
+      }
+    });
+
+    document.getElementById('copy-lyrics-btn').addEventListener('click', () => {
+      if (!currentSongData || !currentSongData.lyrics) return;
+      
+      const textArea = document.createElement('textarea');
+      textArea.value = `${currentSongData.title}\n\n${currentSongData.lyrics}`;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      showToast('歌詞をクリップボードにコピーしました！');
+    });
+
+    document.getElementById('download-abc-btn').addEventListener('click', () => {
+      if (!currentSongData || !currentSongData.abcNotation) return;
+
+      const blob = new Blob([currentSongData.abcNotation], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(currentSongData.title || 'song').replace(/[\/\\?%*:|"<>]/g, '_')}.abc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('ABCファイルをダウンロードしました');
+    });
+
+    /* History Modal Handler */
+    const historyModal = document.getElementById('history-modal');
+    const historyList = document.getElementById('history-list');
+
+    function renderHistoryList() {
+      historyList.innerHTML = '';
+
+      if (songHistory.length === 0) {
+        historyList.innerHTML = `
+          <div class="text-center py-10 text-slate-500 text-xs">
+            履歴はありません
+          </div>
+        `;
+        return;
+      }
+
+      songHistory.forEach((item) => {
+        const div = document.createElement('div');
+        div.className = 'p-3 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-brand-500/50 cursor-pointer transition flex items-center justify-between group';
+        div.innerHTML = `
+          <div class="flex-1 min-w-0 pr-3">
+            <h4 class="text-xs font-semibold text-slate-200 truncate group-hover:text-brand-400">${item.title || '無題'}</h4>
+            <p class="text-[10px] text-slate-400">${item.genre || 'Music'} • ${item.createdAt}</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-600 group-hover:text-brand-400"></i>
+        `;
+        div.addEventListener('click', () => {
+          displaySong(item, false);
+          historyModal.classList.add('hidden');
+          showToast(`「${item.title}」を読み込みました`);
+        });
+        historyList.appendChild(div);
+      });
+
+      lucide.createIcons();
+    }
+
+    document.getElementById('history-toggle-btn').addEventListener('click', () => {
+      renderHistoryList();
+      historyModal.classList.remove('hidden');
+    });
+
+    document.getElementById('close-history-btn').addEventListener('click', () => {
+      historyModal.classList.add('hidden');
+    });
+
+    document.getElementById('clear-history-btn').addEventListener('click', () => {
+      songHistory = [];
+      localStorage.removeItem('ai_song_history');
+      updateHistoryCount();
+      renderHistoryList();
+      showToast('履歴を消去しました');
+    });
+
+    /* Close Modals on backdrop click */
+    window.addEventListener('click', (e) => {
+      if (e.target === historyModal) historyModal.classList.add('hidden');
+      if (e.target === apiModal) apiModal.classList.add('hidden');
+      if (e.target === registerModal) registerModal.classList.add('hidden');
+      if (e.target === loginModal) loginModal.classList.add('hidden');
+      if (e.target === forgotModal) forgotModal.classList.add('hidden');
+      if (e.target === accountModal) accountModal.classList.add('hidden');
+      if (e.target === mailboxModal) mailboxModal.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
